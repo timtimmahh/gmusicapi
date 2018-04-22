@@ -1,10 +1,14 @@
-import com.squareup.moshi.KotlinJsonAdapterFactory
-import com.squareup.moshi.Moshi
+import com.google.gson.Gson
 import com.timmahh.gmusicapi.protocol.*
+import okhttp3.Interceptor
+import okhttp3.OkHttpClient
+import okhttp3.Response
+import okhttp3.logging.HttpLoggingInterceptor
 import retrofit2.Call
 import retrofit2.Retrofit
-import retrofit2.converter.moshi.MoshiConverterFactory
+import retrofit2.converter.gson.GsonConverterFactory
 import retrofit2.http.*
+import java.io.IOException
 
 /* the base URL for MusicManager */
 const val android_url: String = "https://android.clients.google.com/upsj/"
@@ -20,26 +24,61 @@ data class OAuthInfo(
 		val redirect: String = "https://www.googleapis.com/auth/musicmanager")
 
 /**
- * Creates a Retrofit instance with necessary JSON conversion adapters
+ * The request interceptor that will add the header with OAuth
+ * token to every request made with the wrapper.
  */
-fun createRetrofit(url: String): Retrofit = Retrofit.Builder()
-		.baseUrl(url)
-		.addConverterFactory(MoshiConverterFactory.create(Moshi.Builder()
-				.add(KotlinJsonAdapterFactory())
-				.add(GpmJsonAdapterFactory.INSTANCE)
-				.add(CredentialDateAdapter())
-				.build()))
-		.build()
+class ApiAuthenticator(val mAccessToken: String?, val locale: String = "en_US", val isSubscribed: Boolean = false) : Interceptor {
+	
+	@Throws(IOException::class)
+	override fun intercept(chain: Interceptor.Chain): Response {
+		val request = chain.request()
+		if (mAccessToken != null) {
+			val authRequest = request.newBuilder()
+					.url(request.url().newBuilder()
+							.addQueryParameter("hl", locale)
+							.addQueryParameter("dv", "0")
+							.addQueryParameter("tier", if (isSubscribed) "aa" else "fr")
+							.build())
+					.addHeader("Authorization", "GoogleLogin auth=" + mAccessToken)
+					.build()
+			
+			return chain.proceed(authRequest)
+		}
+		return chain.proceed(request)
+	}
+}
+
+/**
+ * Creates a Retrofit instance with necessary JSON conversion adapters.
+ */
+fun createRetrofit(url: String,
+                   httpClient: OkHttpClient = createAuthenticatedHttpClient()): Retrofit =
+		Retrofit.Builder()
+				.client(httpClient)
+				.baseUrl(url)
+				.addConverterFactory(GsonConverterFactory.create(Gson()))
+				.build()
+
+/**
+ * Creates the OkHttpClient with an authenticated interceptor.
+ */
+fun createAuthenticatedHttpClient(authToken: String? = null): OkHttpClient =
+		OkHttpClient.Builder()
+				.addInterceptor(ApiAuthenticator(authToken))
+				.addInterceptor(HttpLoggingInterceptor().setLevel(HttpLoggingInterceptor.Level.BODY))
+				.build()
 
 /**
  * Creates a Retrofit service instance for MusicManagerService
  */
-fun createMusicManagerService(): MusicManagerService = createRetrofit(android_url).create(MusicManagerService::class.java)
+fun createMusicManagerService(httpClient: OkHttpClient = createAuthenticatedHttpClient()): MusicManagerService =
+		createRetrofit(android_url, httpClient).create(MusicManagerService::class.java)
 
 /**
  * Creates a Retrofit service instance for MobileClientService
  */
-fun createMobileClientService(): MobileClientService = createRetrofit(sj_url).create(MobileClientService::class.java)
+fun createMobileClientService(httpClient: OkHttpClient = createAuthenticatedHttpClient()): MobileClientService =
+		createRetrofit(sj_url, httpClient).create(MobileClientService::class.java)
 
 /**
  * A Retrofit service implementation of Simon Weber's MusicManager protocol

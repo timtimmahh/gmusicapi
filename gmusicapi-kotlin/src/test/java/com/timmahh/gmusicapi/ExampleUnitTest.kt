@@ -1,6 +1,6 @@
 package com.timmahh.gmusicapi
 
-import org.junit.Assert.assertEquals
+import com.timmahh.gmusicapi.clients.MobileClient
 import org.junit.Test
 
 /**
@@ -9,8 +9,9 @@ import org.junit.Test
  * See [testing documentation](http://d.android.com/tools/testing).
  */
 class ExampleUnitTest {
+	val mobileClient = MobileClient()
 	@Test
-	fun addition_isCorrect() {
-		assertEquals(4, 2 + 2)
+	fun testGetConfig() {
+	
 	}
 }

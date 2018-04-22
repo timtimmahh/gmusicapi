@@ -1,13 +1,18 @@
 package com.timmahh.gmusicapi.clients
 
 import android.util.Base64
-import com.squareup.moshi.KotlinJsonAdapterFactory
-import com.squareup.moshi.Moshi
+import com.google.gson.Gson
 import com.timmahh.gmusicapi.protocol.*
+import createAuthenticatedHttpClient
 import createMobileClientService
+import kotlinx.coroutines.experimental.Deferred
+import kotlinx.coroutines.experimental.async
+import okhttp3.OkHttpClient
 import retrofit2.Call
 import retrofit2.Callback
 import retrofit2.Response
+import svarzee.gps.gpsoauth.Gpsoauth
+import java.security.InvalidParameterException
 import java.util.*
 import javax.crypto.Mac
 import javax.crypto.spec.SecretKeySpec
@@ -19,8 +24,21 @@ import kotlin.experimental.xor
 @Suppress("unused")
 class MobileClient {
 	
-	/* the MobileClient Retrofit service to make the calls */
-	private val mobileClientService = createMobileClientService()
+	companion object {
+		
+		@JvmField
+		var httpClient: OkHttpClient = createAuthenticatedHttpClient()
+		
+		/* the MobileClient Retrofit service to make the calls */
+		@JvmField
+		var mobileClientService = createMobileClientService(httpClient = httpClient)
+		
+	}
+	
+	private lateinit var masterToken: String
+	private lateinit var authToken: String
+	private var isAuthenticated: Boolean = false
+	private lateinit var locale: Locale
 	
 	/**
 	 * Helper method to determine whether to perform a synchronous or asynchronous method [call].
@@ -31,6 +49,46 @@ class MobileClient {
 			else {
 				call.enqueue(callback); null
 			}
+	
+	private fun convertResponseStringToJson(response: String): String =
+			"""{
+				|   ${response.split('\n').joinToString(""",
+				|   """.trimMargin()) { "\"" + it.replaceFirst("=", "\": \"") + "\"" }}
+			  |}""".trimMargin()
+	
+	fun login(email: String, password: String, androidId: String, locale: Locale = Locale.US): Deferred<Boolean> = async {
+		if (androidId.isEmpty())
+			throw InvalidParameterException("androidId cannot be empty.")
+		
+		
+		var res = Gpsoauth().performMasterLogin(email, password, androidId)
+		var body = res.body()?.string()
+		var formattedBody = convertResponseStringToJson(body ?: "")
+		//Log.d("MasterLogin", "Unformatted:\n${(body ?: "Empty body")}")
+		//Log.d("MasterLogin", "Formatted:\n$formattedBody")
+		val masterLogin = Gson().fromJson<MasterLogin>(formattedBody, MasterLogin::class.java)
+		if (masterLogin?.token == null || masterLogin.token.isEmpty())
+			return@async false
+		this@MobileClient.masterToken = masterLogin.token
+		
+		res = Gpsoauth().performOAuth(email, this@MobileClient.masterToken, androidId, "sj", "com.google.android.music", "38918a453d07199354f8b19af05ec6562ced5788")
+		body = res.body()?.string()
+		formattedBody = convertResponseStringToJson(body ?: "")
+		//Log.d("OAuthLogin", "Unformatted:\n${(body ?: "Empty body")}")
+		//Log.d("OAuthLogin", "Formatted:\n$formattedBody")
+		val oauthLogin = Gson().fromJson<OAuthLogin>(formattedBody, OAuthLogin::class.java)
+		if (oauthLogin?.auth == null || oauthLogin.auth.isEmpty())
+			return@async false
+		
+		this@MobileClient.authToken = oauthLogin.auth
+		this@MobileClient.isAuthenticated = true
+		this@MobileClient.locale = locale
+		
+		httpClient = createAuthenticatedHttpClient(this@MobileClient.authToken)
+		mobileClientService = createMobileClientService(httpClient)
+		
+		return@async true
+	}
 	
 	/**
 	 * Gets the users current GPM configuration. [callback] is optional for async calls.
@@ -329,16 +387,10 @@ class MobileClient {
 				"source" to entry.source,
 				"trackId" to entry.trackId)
 		
-		val moshi = Moshi.Builder()
-				.add(KotlinJsonAdapterFactory())
-				.add(GpmJsonAdapterFactory.INSTANCE)
-				.add(CredentialDateAdapter())
-				.build()
-		
 		if (toPrecede != null)
-			mutations["precedingEntryId"] = moshi.adapter(PlaylistEntry::class.java).toJson(toPrecede)
+			mutations["precedingEntryId"] = Gson().toJson(toPrecede, PlaylistEntry::class.java)
 		if (toFollow != null)
-			mutations["followingEntryId"] = moshi.adapter(PlaylistEntry::class.java).toJson(toFollow)
+			mutations["followingEntryId"] = Gson().toJson(toFollow, PlaylistEntry::class.java)
 		return executeOrEnqueue(mobileClientService.batchMutatePlaylistEntries(update = "update" to mutations), callback)
 	}
 	

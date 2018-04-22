@@ -1,43 +1,39 @@
 package com.timmahh.gmusicapi.protocol
 
-import com.squareup.moshi.Json
-import se.ansman.kotshi.JsonDefaultValueBoolean
-import se.ansman.kotshi.JsonDefaultValueInt
-import se.ansman.kotshi.JsonDefaultValueString
-import se.ansman.kotshi.JsonSerializable
+import com.google.gson.annotations.SerializedName
 import java.util.*
 
-@JsonSerializable
+//@JsonSerializable
 data class ImageColorStyles(
 		val primary: ImageColors,
 		val scrim: ImageColors,
 		val accent: ImageColors)
 
-@JsonSerializable
+//@JsonSerializable
 data class ImageColors(val red: Int, val green: Int, val blue: Int)
 
-@JsonSerializable
+//@JsonSerializable
 data class Image(val kind: String,
                  val url: String,
                  val aspectRatio: String? = null,
                  val autogen: Boolean? = null,
                  val colorStyles: ImageColorStyles? = null)
 
-@JsonSerializable
+//@JsonSerializable
 data class ImageUrl(val url: String)
 
-@JsonSerializable
+//@JsonSerializable
 data class Video(val kind: String, val id: String, val title: String? = null, val thumbnails: List<Thumbnail>)
 
-@JsonSerializable
+//@JsonSerializable
 data class Thumbnail(val url: String, val width: Int, val height: Int)
 
-@JsonSerializable
+//@JsonSerializable
 data class Track(val kind: String,
                  val title: String,
                  val artist: String,
                  val album: String,
-                 @JsonDefaultValueString("")
+		//@JsonDefaultValueString("")
                  val albumArtist: String = "",
                  val trackNumber: Int,
                  val totalTrackCount: Int? = null,
@@ -54,7 +50,7 @@ data class Track(val kind: String,
                  val nid: String? = null,
                  val trackAvailableForPurchase: Boolean? = null,
                  val albumAvailableForPurchase: Boolean? = null,
-                 @JsonDefaultValueString("")
+		//@JsonDefaultValueString("")
                  val composer: String = "",
                  val playCount: Int? = null,
                  val year: Int? = null,
@@ -68,14 +64,14 @@ data class Track(val kind: String,
                  val contentType: String? = null,
                  val deleted: String? = null,
                  val creationTimestamp: String? = null,
-                 @JsonDefaultValueString("")
+		//@JsonDefaultValueString("")
                  val comment: String? = "",
                  val beatsPerMinute: Int? = null,
                  val recentTimestamp: String? = null,
                  val clientId: String? = null,
                  val id: String? = null)
 
-@JsonSerializable
+//@JsonSerializable
 data class Playlist(val kind: String,
                     val name: String,
                     val deleted: Boolean? = null,
@@ -90,12 +86,12 @@ data class Playlist(val kind: String,
                     val creationTimestamp: String? = null,
                     val id: String? = null,
                     val albumArtRef: List<ImageUrl>? = null,
-                    @JsonDefaultValueString("")
+		//@JsonDefaultValueString("")
                     val description: String? = "",
                     val explicitType: String? = null,
                     val contentType: String? = null)
 
-@JsonSerializable
+//@JsonSerializable
 data class PlaylistEntry(val kind: String,
                          val id: String,
                          val clientId: String,
@@ -108,52 +104,52 @@ data class PlaylistEntry(val kind: String,
                          val source: String,
                          val track: Track? = null)
 
-@JsonSerializable
+//@JsonSerializable
 data class Attribution(val kind: String,
-                       @Json(name = "license_url")
+                       @SerializedName("license_url")
                        val licenseUrl: String? = null,
-                       @Json(name = "license_title")
+                       @SerializedName("license_title")
                        val licenseTitle: String? = null,
-                       @Json(name = "source_title") @JsonDefaultValueString("")
+                       @SerializedName("source_title") //@JsonDefaultValueString("")
                        val sourceTitle: String? = "",
-                       @Json(name = "source_url") @JsonDefaultValueString("")
+                       @SerializedName("source_url") //@JsonDefaultValueString("")
                        val sourceUrl: String? = "")
 
-@JsonSerializable
+//@JsonSerializable
 data class Album(val kind: String,
                  val name: String,
                  val albumArtist: String,
                  val albumArtRef: String? = null,
                  val albumId: String,
-                 @JsonDefaultValueString("")
-                 val artist: String = "",
-                 val artistId: List<String>,
-                 val year: Int? = null,
-                 val tracks: List<Track>? = null,
-                 val description: String? = null,
-                 @Json(name = "description_attribution")
+		//@JsonDefaultValueString("")
+		         val artist: String = "",
+		         val artistId: List<String>,
+		         val year: Int? = null,
+		         val tracks: List<Track>? = null,
+		         val description: String? = null,
+		         @SerializedName("description_attribution")
                  val descriptionAttribution: Attribution? = null,
-                 val explicitType: String? = null,
-                 val contentType: String? = null)
+		         val explicitType: String? = null,
+		         val contentType: String? = null)
 
-@JsonSerializable
+//@JsonSerializable
 data class Artist(val kind: String,
                   val name: String,
                   val artistArtRef: String? = null,
                   val artistArtRefs: List<Image>? = null,
                   val artistBio: String? = null,
-                  @JsonDefaultValueString("")
-                  val artistId: String? = "",
-                  val albums: List<Album>? = null,
-                  val topTracks: List<Track>? = null,
-                  @Json(name = "total_albums")
+		//@JsonDefaultValueString("")
+		          val artistId: String? = "",
+		          val albums: List<Album>? = null,
+		          val topTracks: List<Track>? = null,
+		          @SerializedName("total_albums")
                   val totalAlbums: Int? = null,
-                  @Json(name = "artist_bio_attribution")
+		          @SerializedName("artist_bio_attribution")
                   val artistBioAttribution: Attribution? = null,
-                  @Json(name = "related_artists")
+		          @SerializedName("related_artists")
                   val relatedArtists: List<Artist>? = null)
 
-@JsonSerializable
+//@JsonSerializable
 data class Genre(val kind: String,
                  val id: String,
                  val name: String,
@@ -161,12 +157,12 @@ data class Genre(val kind: String,
                  val parentId: String? = null,
                  val images: List<ImageUrl>? = null)
 
-@JsonSerializable
+//@JsonSerializable
 data class StationMetadataSeed(val kind: String,
                                val artist: Artist? = null,
                                val genre: Genre? = null)
 
-@JsonSerializable
+//@JsonSerializable
 data class StationSeed(val kind: String,
                        val seedType: String,
                        val albumId: String? = null,
@@ -177,11 +173,11 @@ data class StationSeed(val kind: String,
                        val curatedStationId: String? = null,
                        val metadataSeed: StationMetadataSeed? = null)
 
-@JsonSerializable
+//@JsonSerializable
 data class StationTrack(val track: Track,
-                        @Json(name = "wentryid") val wentryId: String? = null)
+                        @SerializedName("wentryid") val wentryId: String? = null)
 
-@JsonSerializable
+//@JsonSerializable
 data class Station(val imageUrl: String? = null,
                    val kind: String,
                    val name: String,
@@ -202,54 +198,54 @@ data class Station(val imageUrl: String? = null,
                    val byline: String? = null,
                    val adTargeting: AdTarget? = null)
 
-@JsonSerializable
+//@JsonSerializable
 data class AdTarget(val keyword: List<String>)
 
-@JsonSerializable
+//@JsonSerializable
 data class ListenNowAlbum(
-		@Json(name = "artist_metajam_id") val artistMetajamId: String,
-		@Json(name = "artist_name") val artistName: String,
-		@Json(name = "artist_profile_image") val artistProfileImage: ImageUrl,
-		@JsonDefaultValueString("")
+		@SerializedName("artist_metajam_id") val artistMetajamId: String,
+		@SerializedName("artist_name") val artistName: String,
+		@SerializedName("artist_profile_image") val artistProfileImage: ImageUrl,
+		//@JsonDefaultValueString("")
 		val description: String = "",
-		@Json(name = "description_attribution")
+		@SerializedName("description_attribution")
 		val descriptionAttribution: Attribution? = null,
 		val explicitType: String? = null,
 		val id: ListenNowAlbumId,
 		val title: String)
 
-@JsonSerializable
+//@JsonSerializable
 data class ListenNowAlbumId(val metajamCompactKey: String,
                             val artist: String,
                             val title: String)
 
-@JsonSerializable
+//@JsonSerializable
 data class ListenNowStation(
-		@Json(name = "highlight_color") val highlightColor: String? = null,
+		@SerializedName("highlight_color") val highlightColor: String? = null,
 		val id: ListenNowStationIdSeeds,
-		@Json(name = "profile_image") val profileImage: ImageUrl? = null,
+		@SerializedName("profile_image") val profileImage: ImageUrl? = null,
 		val title: String)
 
-@JsonSerializable
+//@JsonSerializable
 data class ListenNowStationIdSeeds(val seeds: List<StationSeed>)
 
-@JsonSerializable
+//@JsonSerializable
 data class ListenNowItem(val kind: String,
                          val compositeArtRefs: List<Image>? = null,
                          val images: List<Image>? = null,
-                         @Json(name = "suggestion_reason") val suggestionReason: String,
-                         @Json(name = "suggestion_text") val suggestionText: String,
+                         @SerializedName("suggestion_reason") val suggestionReason: String,
+                         @SerializedName("suggestion_text") val suggestionText: String,
                          val type: String,
                          val album: ListenNowAlbum? = null,
-                         @Json(name = "radio_station")
+                         @SerializedName("radio_station")
                          val radioStation: ListenNowStation? = null)
 
-@JsonSerializable
+//@JsonSerializable
 data class PodcastGenre(val id: String,
                         val displayName: String,
                         val subgroups: List<PodcastGenre>? = null)
 
-@JsonSerializable
+//@JsonSerializable
 data class PodcastEpisode(val art: List<Image>? = null,
                           val author: String? = null,
                           val deleted: String? = null,
@@ -264,10 +260,10 @@ data class PodcastEpisode(val art: List<Image>? = null,
                           val seriesTitle: String,
                           val title: String)
 
-@JsonSerializable
+//@JsonSerializable
 data class PodcastSeries(val art: List<Image>? = null,
                          val author: String,
-                         @JsonDefaultValueString("")
+		//@JsonDefaultValueString("")
                          val continuationToken: String? = "",
                          val copyright: String? = null,
                          val description: String? = null,
@@ -279,12 +275,12 @@ data class PodcastSeries(val art: List<Image>? = null,
                          val totalNumEpisodes: Int,
                          val userPreferences: PodcastSeriesUserPreferences? = null)
 
-@JsonSerializable
+//@JsonSerializable
 data class PodcastSeriesUserPreferences(val autoDownload: Boolean? = null,
                                         val notifyOnNewEpisode: Boolean? = null,
                                         val subscribed: Boolean)
 
-@JsonSerializable
+//@JsonSerializable
 data class Situation(val description: String,
                      val id: String,
                      val imageUrl: String? = null,
@@ -293,13 +289,13 @@ data class Situation(val description: String,
                      val stations: List<Station>? = null,
                      val situations: List<Situation>? = null)
 
-@JsonSerializable
+//@JsonSerializable
 data class SearchResult(val score: Number? = null,
                         val type: String,
-                        @Json(name = "best_result") val bestResult: Boolean? = null,
-                        @Json(name = "navigational_result")
+                        @SerializedName("best_result") val bestResult: Boolean? = null,
+                        @SerializedName("navigational_result")
                         val navigationalResult: Boolean? = null,
-                        @Json(name = "navigational_confidence")
+                        @SerializedName("navigational_confidence")
                         val navigationalConfidence: Number? = null,
                         val artist: Artist? = null,
                         val album: Album? = null,
@@ -308,136 +304,156 @@ data class SearchResult(val score: Number? = null,
                         val series: PodcastSeries? = null,
                         val station: Station? = null,
                         val situation: Situation? = null,
-                        @Json(name = "youtube_video") val youtubeVideo: Video? = null)
+                        @SerializedName("youtube_video") val youtubeVideo: Video? = null)
 
-@JsonSerializable
+//@JsonSerializable
 data class Config(val kind: String,
                   val key: String,
                   val value: String)
 
-@JsonSerializable
+//@JsonSerializable
 data class ConfigList<out T>(val kind: String,
                              val data: Entries<T>)
 
-@JsonSerializable
+//@JsonSerializable
 data class DeviceManagement(val id: String,
-                            @JsonDefaultValueString("")
+		//@JsonDefaultValueString("")
                             val friendlyName: String = "",
                             val type: String,
                             val lastAccessedTimeMs: Int,
                             val smartPhone: Boolean? = null)
 
-@JsonSerializable
+//@JsonSerializable
 data class SharedPlaylistEntry(val shareToken: String,
                                val responseCode: String,
                                val playlistEntry: List<PlaylistEntry>? = null)
 
-@JsonSerializable
+//@JsonSerializable
 data class Entries<out T>(val kind: String? = null,
                           val clusterOrder: List<String>? = null,
                           val entries: List<T>? = null,
                           val suggestedQuery: String? = null)
 
-@JsonSerializable
+//@JsonSerializable
 data class ListPager<out T>(val kind: String,
                             val nextPageToken: String? = null,
                             val data: ListItems<T>? = null)
 
-@JsonSerializable
+//@JsonSerializable
 data class ListItems<out T>(val items: List<T>)
 
-@JsonSerializable
+//@JsonSerializable
 data class ListenNowItems(val kind: String,
-                          @Json(name = "listennow_items")
+                          @SerializedName("listennow_items")
                           val listenNowItems: List<ListenNowItem>)
 
-@JsonSerializable
+//@JsonSerializable
 data class ListListenNowSituations(val distilledContextWrapper: DistilledContextWrapper,
                                    val primaryHeader: String,
                                    val subHeader: String,
                                    val situations: List<Situation>)
 
-@JsonSerializable
+//@JsonSerializable
 data class ListStationTracks(val kind: String,
                              val data: StationTracks)
 
-@JsonSerializable
+//@JsonSerializable
 data class StationTracks(val stations: List<Station>? = null)
 
-@JsonSerializable
+//@JsonSerializable
 data class ListGenres(val kind: String,
                       val genres: List<Genre>? = null)
 
-@JsonSerializable
+//@JsonSerializable
 data class BrowsePodcastHierarchy(val groups: List<PodcastGenre>? = null)
 
-@JsonSerializable
+//@JsonSerializable
 data class BrowsePodcastSeries(val series: List<PodcastSeries>)
 
-@JsonSerializable
+//@JsonSerializable
 data class DistilledContextWrapper(val distilledContextToken: String? = null)
 
-@JsonSerializable
-data class BatchMutateCall(@Json(name = "mutate_response")
+//@JsonSerializable
+data class BatchMutateCall(@SerializedName("mutate_response")
                            val mutateResponse: List<MutateCall>)
 
-@JsonSerializable
+//@JsonSerializable
 data class MutateCall(val id: String? = null,
-                      @Json(name = "client_id") @JsonDefaultValueString("")
+                      @SerializedName("client_id") //@JsonDefaultValueString("")
                       val clientId: String? = "",
-                      @Json(name = "response_code") val responseCode: String)
+                      @SerializedName("response_code") val responseCode: String)
 
 data class PlayCountData(val songId: String,
                          val playCount: Int,
                          val playTimestamp: Date,
                          val contextId: String? = null)
 
-@JsonSerializable
+//@JsonSerializable
 data class IncrementPlayCount(val responses: List<MutateCall>)
 
-@JsonSerializable
-data class Credentials(@Json(name = "_module")
-                       @JsonDefaultValueString("oauth2client.client")
+//@JsonSerializable
+data class Credentials(@SerializedName("_module")
+                       //@JsonDefaultValueString("oauth2client.client")
                        val module: String = "oauth2client.client",
-                       @Json(name = "token_expiry") @CredentialDate
+                       @SerializedName("token_expiry")
                        val tokenExpiry: Date,
-                       @Json(name = "access_token") @JsonDefaultValueString("bogus")
+                       @SerializedName("access_token") //@JsonDefaultValueString("bogus")
                        val accessToken: String = "bogus",
-                       @Json(name = "token_uri") @JsonDefaultValueString("https://accounts.google" +
-		                       ".com/o/oauth2/token")
+                       @SerializedName("token_uri") //@JsonDefaultValueString("https://accounts.google.com/o/oauth2/token")
                        val tokenUri: String = "https://accounts.google.com/o/oauth2/token",
-                       @JsonDefaultValueBoolean(false)
-                       val invalid: Boolean = false,
-                       @Json(name = "token_response")
+		//@JsonDefaultValueBoolean(false)
+		               val invalid: Boolean = false,
+		               @SerializedName("token_response")
                        val tokenResponse: TokenResponse,
-                       @Json(name = "client_id")
-                       @JsonDefaultValueString("652850857958.apps.googleusercontent.com")
+		               @SerializedName("client_id")
+                       //@JsonDefaultValueString("652850857958.apps.googleusercontent.com")
                        val clientId: String = "652850857958.apps.googleusercontent.com",
-                       @Json(name = "id_token")
+		               @SerializedName("id_token")
                        val idToken: String? = null,
-                       @Json(name = "client_secret")
-                       @JsonDefaultValueString("ji1rklciNp2bfsFJnEH_i6al")
+		               @SerializedName("client_secret")
+                       //@JsonDefaultValueString("ji1rklciNp2bfsFJnEH_i6al")
                        val clientSecret: String = "ji1rklciNp2bfsFJnEH_i6al",
-                       @Json(name = "revoke_uri")
-                       @JsonDefaultValueString("https://accounts.google.com/o/oauth2/revoke")
+		               @SerializedName("revoke_uri")
+                       //@JsonDefaultValueString("https://accounts.google.com/o/oauth2/revoke")
                        val revokeUri: String = "https://accounts.google.com/o/oauth2/revoke",
-                       @Json(name = "_class")
-                       @JsonDefaultValueString("OAuth2Credentials")
+		               @SerializedName("_class")
+                       //@JsonDefaultValueString("OAuth2Credentials")
                        val _class: String = "OAuth2Credentials",
-                       @Json(name = "refresh_token")
+		               @SerializedName("refresh_token")
                        val refreshToken: Any,
-                       @Json(name = "user_agent")
+		               @SerializedName("user_agent")
                        val userAgent: String? = null)
 
-@JsonSerializable
-data class TokenResponse(@Json(name = "access_token")
-                         @JsonDefaultValueString("bogus")
+//@JsonSerializable
+data class TokenResponse(@SerializedName("access_token")
+                         //@JsonDefaultValueString("bogus")
                          val accessToken: String = "bogus",
-                         @Json(name = "token_type")
-                         @JsonDefaultValueString("Bearer")
+                         @SerializedName("token_type")
+                         //@JsonDefaultValueString("Bearer")
                          val tokenType: String = "bearer",
-                         @Json(name = "expires_in")
-                         @JsonDefaultValueInt(3600)
+                         @SerializedName("expires_in")
+                         //@JsonDefaultValueInt(3600)
                          val expiresIn: Int = 3600,
-                         @Json(name = "refresh_token")
-                         val refreshToken: Any)
+                         @SerializedName("refresh_token")
+                         val refreshToken: String)
+
+data class MasterLogin(@SerializedName("Auth") val auth: String,
+                       @SerializedName("Email") val email: String,
+                       @SerializedName("GooglePlusUpgrade") val googlePlusUpgrade: String = "1",
+                       @SerializedName("LSID") val lsid: String,
+                       @SerializedName("PicasaUser") val picasaUser: String = "",
+                       @SerializedName("RopRevision") val ropRevision: String = "1",
+                       @SerializedName("RopText") val ropText: String = "",
+                       @SerializedName("SID") val sid: String,
+                       @SerializedName("Token") val token: String,
+                       @SerializedName("firstName") val firstName: String,
+                       @SerializedName("lastName") val lastName: String,
+                       @SerializedName("services") val services: String)
+
+data class OAuthLogin(@SerializedName("Auth") val auth: String,
+                      @SerializedName("LSID") val lsid: String,
+                      @SerializedName("SID") val sid: String,
+                      @SerializedName("issueAdvice") val issueAdvice: String = "auto",
+                      @SerializedName("services") val services: String,
+                      @SerializedName("firstName") val firstName: String,
+                      @SerializedName("lastName") val lastName: String)

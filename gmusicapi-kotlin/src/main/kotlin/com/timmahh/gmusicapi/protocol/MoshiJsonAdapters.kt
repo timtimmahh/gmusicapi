@@ -1,14 +1,7 @@
 package com.timmahh.gmusicapi.protocol
 
-import com.squareup.moshi.FromJson
-import com.squareup.moshi.JsonAdapter
-import com.squareup.moshi.JsonQualifier
-import com.squareup.moshi.ToJson
-import se.ansman.kotshi.KotshiJsonAdapterFactory
-import java.text.SimpleDateFormat
-import java.util.*
 
-
+/*
 @Retention(AnnotationRetention.RUNTIME)
 @JsonQualifier
 annotation class CredentialDate
@@ -25,9 +18,10 @@ class CredentialDateAdapter {
 	
 }
 
-@KotshiJsonAdapterFactory
-abstract class GpmJsonAdapterFactory : JsonAdapter.Factory {
-	companion object {
-		val INSTANCE: GpmJsonAdapterFactory = KotshiGpmJsonAdapterFactory()
-	}
-}
+class ConfigAdapter {
+	
+	@ToJson fun toJson(config: Config): String =
+	
+	
+	
+}*/
