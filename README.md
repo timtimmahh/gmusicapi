@@ -5,4 +5,4 @@ This port is being developed to run on Android devices so third parties can impl
 
 **This project is not supported nor endorsed by Google**
 
-This project is currently in its very early stages, nothing works yet.
+This project is currently in its very early stages, so far only the MobileClient has been tested to work.
