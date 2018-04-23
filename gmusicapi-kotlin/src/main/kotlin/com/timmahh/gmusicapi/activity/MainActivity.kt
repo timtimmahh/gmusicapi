@@ -26,7 +26,7 @@ class MainActivity : AppCompatActivity() {
 		val mobileClient = MobileClient()
 		launch(CommonPool) {
 			if (mobileClient.login("timtimmahh@gmail.com", "sfavmftqmztyqkof", Settings.Secure.getString(contentResolver, ANDROID_ID), Locale.getDefault()).await())
-				Log.d("Google Play Music", "Login successfull")
+				Log.d("Google Play Music", "Login successful")
 			else Log.d("Google Play Music", "Login failed")
 			
 			launch(UI) {

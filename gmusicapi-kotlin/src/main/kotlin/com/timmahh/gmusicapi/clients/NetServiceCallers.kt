@@ -555,6 +555,18 @@ class MobileClient {
 							"clientId" to storeTrackInfo.clientId,
 							"id" to storeTrackInfo.id)), callback)
 	
+	sealed class Rating(val rating: String) {
+		class NoThumb : Rating("0")
+		class DownThumb : Rating("1")
+		class UpThumb : Rating("5")
+	}
+	
+	fun rateSongs(songs: List<Track>, rating: Rating = Rating.UpThumb(), callback: Callback<BatchMutateCall>? = null): Response<BatchMutateCall>? =
+			executeOrEnqueue(mobileClientService.batchMutateTracks(updateTracks = songs.map { it.rating = rating.rating; ("update" to it) }), callback)
+	
+	fun changeSongMetadata(songs: List<Track>, callback: Callback<BatchMutateCall>? = null): Response<BatchMutateCall>? =
+			executeOrEnqueue(mobileClientService.batchMutateTracks(updateTracks = songs.map { ("update" to it) }), callback)
+	
 	/**
 	 * Returns a list of devices associated with the account.
 	 * [callback] is optional used for async calls.

@@ -235,6 +235,7 @@ interface MobileClientService {
 	@Headers(contentType)
 	@POST("trackbatch?alt=json")
 	fun batchMutateTracks(@Body deleteTracks: List<Pair<String, String>>? = null,
+	                      @Body updateTracks: List<Pair<String, Track>>? = null,
 	                      @Body addTracks: Pair<String, Map<String, Any?>>? = null): Call<BatchMutateCall>
 	
 	@GET("devicemanagementinfo?alt=json")
