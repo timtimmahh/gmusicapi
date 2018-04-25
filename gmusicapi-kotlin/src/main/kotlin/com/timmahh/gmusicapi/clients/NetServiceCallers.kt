@@ -1,15 +1,16 @@
 package com.timmahh.gmusicapi.clients
 
+import android.content.SharedPreferences
 import android.util.Base64
+import android.util.Log
 import com.google.gson.Gson
 import com.timmahh.gmusicapi.protocol.*
-import createAuthenticatedHttpClient
+import createAuthHttpClient
 import createMobileClientService
 import kotlinx.coroutines.experimental.Deferred
 import kotlinx.coroutines.experimental.async
 import okhttp3.OkHttpClient
 import retrofit2.Call
-import retrofit2.Callback
 import retrofit2.Response
 import svarzee.gps.gpsoauth.Gpsoauth
 import java.security.InvalidParameterException
@@ -27,65 +28,95 @@ class MobileClient {
 	companion object {
 		
 		@JvmField
-		var httpClient: OkHttpClient = createAuthenticatedHttpClient()
+		var httpClient: OkHttpClient = createAuthHttpClient()
 		
 		/* the MobileClient Retrofit service to make the calls */
 		@JvmField
 		var mobileClientService = createMobileClientService(httpClient = httpClient)
 		
+		private lateinit var masterToken: String
+		private lateinit var authToken: String
+		private var isAuthenticated: Boolean = false
+		private lateinit var locale: Locale
+		
+		fun saveCredentialsToFile(preferences: SharedPreferences) =
+				preferences.edit()
+						.putString("Master", masterToken)
+						.putString("Token", authToken)
+						.apply()
+		
+		fun readCredentialsFromFile(preferences: SharedPreferences, locale: Locale): Boolean =
+				if (preferences.contains("Master") && preferences.contains("Token")) {
+					masterToken = preferences.getString("Master", "")
+					authToken = preferences.getString("Token", "")
+					isAuthenticated = masterToken.isNotEmpty() && authToken.isNotEmpty()
+					MobileClient.locale = locale
+					httpClient = createAuthHttpClient(authToken)
+					mobileClientService = createMobileClientService(httpClient)
+					isAuthenticated
+				} else false
+		
 	}
-	
-	private lateinit var masterToken: String
-	private lateinit var authToken: String
-	private var isAuthenticated: Boolean = false
-	private lateinit var locale: Locale
 	
 	/**
 	 * Helper method to determine whether to perform a synchronous or asynchronous method [call].
 	 * Async calls return the result through [callback].
 	 */
-	private fun <R> executeOrEnqueue(call: Call<R>, callback: Callback<R>?): Response<R>? =
+	private fun <R> executeOrEnqueue(call: Call<R>, callback: GpmCallback<R>?): Response<R>? =
 			if (callback == null) call.execute()
 			else {
 				call.enqueue(callback); null
 			}
 	
+	/**
+	 * Converts login results into JSON format.
+	 */
 	private fun convertResponseStringToJson(response: String): String =
 			"""{
 				|   ${response.split('\n').joinToString(""",
 				|   """.trimMargin()) { "\"" + it.replaceFirst("=", "\": \"") + "\"" }}
 			  |}""".trimMargin()
 	
-	fun login(email: String, password: String, androidId: String, locale: Locale = Locale.US): Deferred<Boolean> = async {
+	suspend fun loginWithSavedCredsOrGet(sharedPreferences: SharedPreferences, email: String, password: String, androidId: String, locale: Locale = Locale.US) =
+			readCredentialsFromFile(sharedPreferences, locale) || login(email, password, androidId, locale).await().also { if (it) saveCredentialsToFile(sharedPreferences) }
+	
+	/**
+	 * Performs a master login flow for Google accounts.
+	 * [email] the email of the Google account.
+	 * [password] the password of the Google account.
+	 * [androidId] the current device's Android ID.
+	 * [locale] the current device's locale.
+	 */
+	private fun login(email: String, password: String, androidId: String, locale: Locale = Locale.US): Deferred<Boolean> = async {
 		if (androidId.isEmpty())
 			throw InvalidParameterException("androidId cannot be empty.")
 		
 		
-		var res = Gpsoauth().performMasterLogin(email, password, androidId)
-		var body = res.body()?.string()
-		var formattedBody = convertResponseStringToJson(body ?: "")
-		//Log.d("MasterLogin", "Unformatted:\n${(body ?: "Empty body")}")
-		//Log.d("MasterLogin", "Formatted:\n$formattedBody")
-		val masterLogin = Gson().fromJson<MasterLogin>(formattedBody, MasterLogin::class.java)
-		if (masterLogin?.token == null || masterLogin.token.isEmpty())
-			return@async false
-		this@MobileClient.masterToken = masterLogin.token
+		MobileClient.masterToken = Gpsoauth(httpClient).performMasterLoginForToken(email, password, androidId)
 		
-		res = Gpsoauth().performOAuth(email, this@MobileClient.masterToken, androidId, "sj", "com.google.android.music", "38918a453d07199354f8b19af05ec6562ced5788")
-		body = res.body()?.string()
-		formattedBody = convertResponseStringToJson(body ?: "")
-		//Log.d("OAuthLogin", "Unformatted:\n${(body ?: "Empty body")}")
-		//Log.d("OAuthLogin", "Formatted:\n$formattedBody")
-		val oauthLogin = Gson().fromJson<OAuthLogin>(formattedBody, OAuthLogin::class.java)
+		val oauthLogin = Gson().fromJson<OAuthLogin>(
+				convertResponseStringToJson(
+						Gpsoauth(httpClient).performOAuth(
+								email,
+								MobileClient.masterToken,
+								androidId,
+								"sj",
+								"com.google.android.music",
+								"38918a453d07199354f8b19af05ec6562ced5788"
+						                                 ).body()?.string() ?: ""),
+				OAuthLogin::class.java)
+		
 		if (oauthLogin?.auth == null || oauthLogin.auth.isEmpty())
 			return@async false
 		
-		this@MobileClient.authToken = oauthLogin.auth
-		this@MobileClient.isAuthenticated = true
-		this@MobileClient.locale = locale
+		MobileClient.authToken = oauthLogin.auth
+		MobileClient.isAuthenticated = true
+		MobileClient.locale = locale
 		
-		httpClient = createAuthenticatedHttpClient(this@MobileClient.authToken)
-		mobileClientService = createMobileClientService(httpClient)
+		Log.d("OnLogin", "Auth: ${MobileClient.authToken}")
+		
+		MobileClient.httpClient = createAuthHttpClient(MobileClient.authToken)
+		MobileClient.mobileClientService = createMobileClientService(MobileClient.httpClient)
 		
 		return@async true
 	}
@@ -93,24 +124,24 @@ class MobileClient {
 	/**
 	 * Gets the users current GPM configuration. [callback] is optional for async calls.
 	 */
-	fun getConfig(callback: Callback<ConfigList<Config>>? = null): Response<ConfigList<Config>>? = executeOrEnqueue(mobileClientService.getConfig(), callback)
+	fun getConfig(callback: GpmCallback<ConfigList<Config>>? = null): Response<ConfigList<Config>>? = executeOrEnqueue(mobileClientService.getConfig(), callback)
 	
 	/**
 	 * Increments the play count for the specified songs.
 	 * [callback] is optional used for async calls.
 	 */
-	fun incrementPlayCount(songData: List<PlayCountData>, callback: Callback<IncrementPlayCount>? = null): Response<IncrementPlayCount>? =
+	fun incrementPlayCount(songData: List<PlayCountData>, callback: GpmCallback<IncrementPlayCount>? = null): Response<IncrementPlayCount>? =
 			executeOrEnqueue(mobileClientService.incrementPlayCount(
 					trackData = "track_stats" to songData.map { (songId, playCount, playTimestamp, contextId) ->
 						mapOf(
 								"id" to songId,
 								"incremental_plays" to playCount,
-								"last_play_time_millis" to playTimestamp.time.toString(),
+								"last_play_time_millis" to "${playTimestamp.time}",
 								"type" to if (songId.startsWith("T")) 2 else 1,
 								"track_events" to Array(playCount, { _ ->
 									val event = mutableMapOf(
 											"context_type" to 1,
-											"event_timestamp_micros" to (playTimestamp.time * 1000).toString(),
+											"event_timestamp_micros" to "${(playTimestamp.time * 1000)}",
 											"event_type" to 2)
 									if (contextId != null)
 										event["context_id"] = contextId
@@ -126,18 +157,18 @@ class MobileClient {
 	 */
 	fun search(query: String,
 	           maxResults: Int = 1000,
-	           resultTypes: String = "1,2,3,4,6,7,8,9",
-	           callback: Callback<Entries<SearchResult>>? = null): Response<Entries<SearchResult>>? =
-			executeOrEnqueue(mobileClientService.search(query = query, maxResults = maxResults, resultTypes = resultTypes), callback)
+	           resultTypes: List<SearchType> = allSearchTypes,
+	           callback: GpmCallback<Entries<SearchResult>>? = null): Response<Entries<SearchResult>>? =
+			executeOrEnqueue(mobileClientService.search(query = query, maxResults = maxResults, resultTypes = resultTypes.joinToString(",") { "${it.type}" }), callback)
 	
 	/**
 	 * Helper method to create request body data for list calls.
 	 * [startToken] is the nextPageToken from a previous response.
 	 * [maxResults] is a positive integer; if not provided, server defaults to 1000.
 	 */
-	private fun listData(startToken: String? = null, maxResults: Int = - 1): MutableMap<String, String> = mutableMapOf<String, String>()
+	private fun listData(startToken: String? = null, maxResults: Int = 1000): MutableMap<String, String> = mutableMapOf<String, String>()
 			.also { if (startToken != null) it["start-token"] = startToken }
-			.also { if (maxResults != - 1) it["max-results"] = maxResults.toString() }
+			.also { if (maxResults != - 1) it["max-results"] = "$maxResults" }
 	
 	/**
 	 * Lists a users tracks.
@@ -148,8 +179,8 @@ class MobileClient {
 	 */
 	fun listTracks(updatedAfter: Date? = null,
 	               startToken: String? = null,
-	               maxResults: Int = - 1,
-	               callback: Callback<ListPager<Track>>? = null): Response<ListPager<Track>>? =
+	               maxResults: Int = 1000,
+	               callback: GpmCallback<ListPager<Track>>? = null): Response<ListPager<Track>>? =
 			executeOrEnqueue(mobileClientService.listTracks(
 					microseconds = updatedAfter?.time?.times(1000) ?: - 1,
 					data = listData(startToken, maxResults)), callback)
@@ -163,11 +194,61 @@ class MobileClient {
 	 */
 	fun listPlaylists(updatedAfter: Date? = null,
 	                  startToken: String? = null,
-	                  maxResults: Int = - 1,
-	                  callback: Callback<ListPager<Playlist>>? = null): Response<ListPager<Playlist>>? =
+	                  maxResults: Int = 1000,
+	                  callback: GpmCallback<ListPager<Playlist>>? = null): Response<ListPager<Playlist>>? =
 			executeOrEnqueue(mobileClientService.listPlaylists(
 					microseconds = updatedAfter?.time?.times(1000) ?: - 1,
 					data = listData(startToken, maxResults)), callback)
+	
+	fun listPlaylistsWithEntries(updatedAfter: Date? = null,
+	                             startToken: String? = null,
+	                             maxResults: Int = 1000,
+	                             callback: BodyOnlyGpmCallback<ListPager<Playlist>>? = null): ListPager<Playlist>? {
+		
+		fun modifyPlaylists(playlists: ListPager<Playlist>) =
+				playlists.copy(items = playlists.items?.filter {
+					it.type == null || it.type == "USER_GENERATED" || it.type == "SHARED"
+				})
+		
+		
+		fun putEntriesIntoPlaylist(playlists: ListPager<Playlist>, entries: List<PlaylistEntry>) =
+				playlists.copy(items = playlists.items?.onEach { playlist ->
+					playlist.tracks = entries.filter { entry ->
+						entry.playlistId == playlist.id
+					}.sortedBy { it.absolutePosition }
+				})
+		
+		
+		var playlists = listPlaylists(updatedAfter, startToken, maxResults, if (callback != null) object : GpmCallback<ListPager<Playlist>>() {
+			
+			override fun onFailure(call: Call<ListPager<Playlist>>, gpmError: GpmError) {
+				callback.onFailure(call = call, gpmError = gpmError)
+			}
+			
+			@Suppress("PARAMETER_NAME_CHANGED_ON_OVERRIDE")
+			override fun onResponse(call: Call<ListPager<Playlist>>, response: Response<ListPager<Playlist>>, payload: ListPager<Playlist>) {
+				listPlaylistEntries(updatedAfter, startToken, maxResults, object : GpmCallback<ListPager<PlaylistEntry>>() {
+					
+					override fun onFailure(plentryCall: Call<ListPager<PlaylistEntry>>, gpmError: GpmError) {
+						callback.onFailure(call = call, gpmError = gpmError)
+					}
+					
+					override fun onResponse(plentryCall: Call<ListPager<PlaylistEntry>>, plentryResponse: Response<ListPager<PlaylistEntry>>, plentryPayload: ListPager<PlaylistEntry>) {
+						callback.onResponse(
+								call = call,
+								payload = putEntriesIntoPlaylist(modifyPlaylists(payload), plentryPayload.items
+										?: return))
+					}
+					
+				})
+			}
+			
+		} else null)?.body() ?: return null
+		
+		playlists = modifyPlaylists(playlists)
+		return putEntriesIntoPlaylist(playlists, listPlaylistEntries(updatedAfter, startToken, maxResults, null) !!.body()?.items
+				?: return playlists)
+	}
 	
 	/**
 	 * Lists the contents of all user-created playlists.
@@ -178,8 +259,8 @@ class MobileClient {
 	 */
 	fun listPlaylistEntries(updatedAfter: Date? = null,
 	                        startToken: String? = null,
-	                        maxResults: Int = - 1,
-	                        callback: Callback<ListPager<PlaylistEntry>>? = null): Response<ListPager<PlaylistEntry>>? =
+	                        maxResults: Int = 1000,
+	                        callback: GpmCallback<ListPager<PlaylistEntry>>? = null): Response<ListPager<PlaylistEntry>>? =
 			executeOrEnqueue(mobileClientService.listPlaylistEntries(
 					microseconds = updatedAfter?.time?.times(1000) ?: - 1,
 					data = listData(startToken, maxResults)), callback)
@@ -194,9 +275,9 @@ class MobileClient {
 	 */
 	fun listSharedPlaylistEntries(updatedAfter: Date? = null,
 	                              startToken: String? = null,
-	                              maxResults: Int = - 1,
+	                              maxResults: Int = 1000,
 	                              shareToken: String,
-	                              callback: Callback<Entries<SharedPlaylistEntry>>? = null): Response<Entries<SharedPlaylistEntry>>? =
+	                              callback: GpmCallback<Entries<SharedPlaylistEntry>>? = null): Response<Entries<SharedPlaylistEntry>>? =
 			executeOrEnqueue(mobileClientService.listSharedPlaylistEntries(
 					microseconds = updatedAfter?.time?.times(1000) ?: - 1,
 					entries = listOf(listData(startToken, maxResults) + ("shareToken" to shareToken))), callback)
@@ -210,8 +291,8 @@ class MobileClient {
 	 */
 	fun listPromotedTracks(updatedAfter: Date? = null,
 	                       startToken: String? = null,
-	                       maxResults: Int = - 1,
-	                       callback: Callback<ListPager<Track>>? = null): Response<ListPager<Track>>? =
+	                       maxResults: Int = 1000,
+	                       callback: GpmCallback<ListPager<Track>>? = null): Response<ListPager<Track>>? =
 			executeOrEnqueue(mobileClientService.listPromotedTracks(microseconds = updatedAfter?.time?.times(1000)
 					?: - 1, data = listData(startToken, maxResults)), callback)
 	
@@ -219,13 +300,13 @@ class MobileClient {
 	 * Lists Listen Now albums and stations.
 	 * [callback] is optional used for async calls.
 	 */
-	fun listListenNowItems(callback: Callback<ListenNowItems>? = null): Response<ListenNowItems>? = executeOrEnqueue(mobileClientService.listListenNowItems(), callback)
+	fun listListenNowItems(callback: GpmCallback<ListenNowItems>? = null): Response<ListenNowItems>? = executeOrEnqueue(mobileClientService.listListenNowItems(), callback)
 	
 	/**
 	 * Lists Listen Now situations which each contain a list of related stations or other situations.
 	 * [callback] is optional used for async calls.
 	 */
-	fun listListenNowSituations(callback: Callback<ListListenNowSituations>? = null): Response<ListListenNowSituations>? =
+	fun listListenNowSituations(callback: GpmCallback<ListListenNowSituations>? = null): Response<ListListenNowSituations>? =
 			executeOrEnqueue(mobileClientService.listListenNowSituations(
 					requestSignals = "requestSignals" to ("timeZoneOffsetSecs" to GregorianCalendar.getInstance(Locale.getDefault()).timeZone.getOffset(System.currentTimeMillis()))), callback)
 	
@@ -234,7 +315,7 @@ class MobileClient {
 	 * [id] is the genre id.
 	 * [callback] is optional used for async calls.
 	 */
-	fun listBrowsePodcastSeries(id: String, callback: Callback<BrowsePodcastSeries>? = null): Response<BrowsePodcastSeries>? =
+	fun listBrowsePodcastSeries(id: String, callback: GpmCallback<BrowsePodcastSeries>? = null): Response<BrowsePodcastSeries>? =
 			executeOrEnqueue(mobileClientService.listBrowsePodcastSeries(id = id), callback)
 	
 	/**
@@ -245,9 +326,9 @@ class MobileClient {
 	 * [callback] is optional used for async calls.
 	 */
 	fun listPodcastSeries(updatedAfter: Date? = null,
-	                      startToken: String,
+	                      startToken: String? = null,
 	                      maxResults: Int = 1000,
-	                      callback: Callback<ListPager<PodcastSeries>>? = null): Response<ListPager<PodcastSeries>>? =
+	                      callback: GpmCallback<ListPager<PodcastSeries>>? = null): Response<ListPager<PodcastSeries>>? =
 			executeOrEnqueue(mobileClientService.listPodcastSeries(
 					deviceId = UUID.randomUUID().toString(),
 					microseconds = updatedAfter?.time?.times(1000) ?: - 1,
@@ -262,9 +343,9 @@ class MobileClient {
 	 * [callback] is optional used for async calls.
 	 */
 	fun listPodcastEpisodes(updatedAfter: Date? = null,
-	                        startToken: String,
+	                        startToken: String? = null,
 	                        maxResults: Int = 1000,
-	                        callback: Callback<ListPager<PodcastEpisode>>? = null): Response<ListPager<PodcastEpisode>>? =
+	                        callback: GpmCallback<ListPager<PodcastEpisode>>? = null): Response<ListPager<PodcastEpisode>>? =
 			executeOrEnqueue(mobileClientService.listPodcastEpisodes(
 					deviceId = UUID.randomUUID().toString(),
 					microseconds = updatedAfter?.time?.times(1000) ?: - 1,
@@ -280,8 +361,8 @@ class MobileClient {
 	 */
 	fun listStations(updatedAfter: Date? = null,
 	                 startToken: String? = null,
-	                 maxResults: Int = - 1,
-	                 callback: Callback<ListPager<Station>>? = null): Response<ListPager<Station>>? =
+	                 maxResults: Int = 1000,
+	                 callback: GpmCallback<ListPager<Station>>? = null): Response<ListPager<Station>>? =
 			executeOrEnqueue(mobileClientService.listStations(microseconds = updatedAfter?.time?.times(1000)
 					?: - 1, data = listData(startToken, maxResults)), callback)
 	
@@ -297,7 +378,7 @@ class MobileClient {
 	                      stationId: String,
 	                      numEntries: Int,
 	                      recentlyPlayedSongIds: List<String>,
-	                      callback: Callback<ListStationTracks>? = null): Response<ListStationTracks>? =
+	                      callback: GpmCallback<ListStationTracks>? = null): Response<ListStationTracks>? =
 			executeOrEnqueue(mobileClientService.listStationTracks(
 					microseconds = updatedAfter?.time?.times(1000) ?: - 1,
 					data = mutableMapOf(
@@ -319,7 +400,7 @@ class MobileClient {
 	 * [callback] is optional used for async calls.
 	 */
 	fun deletePlaylists(playlistIds: List<String>,
-	                    callback: Callback<BatchMutateCall>? = null): Response<BatchMutateCall>? =
+	                    callback: GpmCallback<BatchMutateCall>? = null): Response<BatchMutateCall>? =
 			executeOrEnqueue(mobileClientService.batchMutatePlaylists(deletePlaylists = playlistIds.map { "delete" to it }), callback)
 	
 	/**
@@ -328,7 +409,7 @@ class MobileClient {
 	 * [callback] is optional used for async calls.
 	 */
 	fun updatePlaylist(playlistUpdates: List<Playlist>,
-	                   callback: Callback<BatchMutateCall>? = null): Response<BatchMutateCall>? =
+	                   callback: GpmCallback<BatchMutateCall>? = null): Response<BatchMutateCall>? =
 			executeOrEnqueue(mobileClientService.batchMutatePlaylists(
 					updatePlaylists = playlistUpdates.map {
 						"update" to mapOf(
@@ -344,7 +425,7 @@ class MobileClient {
 	 * [callback] is optional used for async calls.
 	 */
 	fun addPlaylist(newPlaylists: List<Playlist>,
-	                callback: Callback<BatchMutateCall>? = null): Response<BatchMutateCall>? =
+	                callback: GpmCallback<BatchMutateCall>? = null): Response<BatchMutateCall>? =
 			executeOrEnqueue(mobileClientService.batchMutatePlaylists(
 					addPlaylists = newPlaylists.map {
 						"create" to mapOf(
@@ -363,7 +444,7 @@ class MobileClient {
 	 * [callback] is optional used for async calls.
 	 */
 	fun deletePlaylistEntries(entryIds: List<String>,
-	                          callback: Callback<BatchMutateCall>? = null): Response<BatchMutateCall>? =
+	                          callback: GpmCallback<BatchMutateCall>? = null): Response<BatchMutateCall>? =
 			executeOrEnqueue(mobileClientService.batchMutatePlaylistEntries(entryIds.map { "delete" to it }), callback)
 	
 	/**
@@ -376,11 +457,11 @@ class MobileClient {
 	fun reorderPlaylistEntry(entry: PlaylistEntry,
 	                         toFollow: PlaylistEntry? = null,
 	                         toPrecede: PlaylistEntry? = null,
-	                         callback: Callback<BatchMutateCall>? = null): Response<BatchMutateCall>? {
+	                         callback: GpmCallback<BatchMutateCall>? = null): Response<BatchMutateCall>? {
 		val mutations = hashMapOf(
 				"clientId" to entry.clientId,
 				"creationTimestamp" to entry.creationTimestamp,
-				"deleted" to entry.deleted.toString(),
+				"deleted" to "${entry.deleted}",
 				"id" to entry.id,
 				"lastModifiedTimestamp" to entry.lastModifiedTimestamp,
 				"playlistId" to entry.playlistId,
@@ -402,7 +483,7 @@ class MobileClient {
 	 */
 	fun addPlaylistEntries(playlistId: String,
 	                       songIds: List<String>,
-	                       callback: Callback<BatchMutateCall>? = null): Response<BatchMutateCall>? {
+	                       callback: GpmCallback<BatchMutateCall>? = null): Response<BatchMutateCall>? {
 		val mutations = ArrayList<Pair<String, Map<String, String>>>()
 		
 		var prevId = UUID.fromString("").toString()
@@ -441,15 +522,15 @@ class MobileClient {
 	 * [callback] is optional used for async calls.
 	 */
 	fun updatePodcastSeries(updates: List<PodcastSeries>,
-	                        callback: Callback<BatchMutateCall>? = null): Response<BatchMutateCall>? =
+	                        callback: GpmCallback<BatchMutateCall>? = null): Response<BatchMutateCall>? =
 			executeOrEnqueue(mobileClientService.batchMutatePodcastSeries(updates.map
 			{
 				"update" to mapOf(
 						"seriesId" to it.seriesId,
-						"subscribed" to if (it.userPreferences != null) it.userPreferences.subscribed.toString() else false.toString(),
+						"subscribed" to if (it.userPreferences != null) "${it.userPreferences.subscribed}" else false.toString(),
 						"userPreferences" to mapOf(
-								"notifyOnNewEpisode" to if (it.userPreferences != null) it.userPreferences.notifyOnNewEpisode.toString() else false.toString(),
-								"subscrubed" to if (it.userPreferences != null) it.userPreferences.subscribed.toString() else false.toString()))
+								"notifyOnNewEpisode" to if (it.userPreferences != null) "${it.userPreferences.notifyOnNewEpisode}" else false.toString(),
+								"subscrubed" to if (it.userPreferences != null) "${it.userPreferences.subscribed}" else false.toString()))
 			}), callback)
 	
 	/**
@@ -458,7 +539,7 @@ class MobileClient {
 	 * [callback] is optional used for async calls.
 	 */
 	fun deleteStations(stationIds: List<String>,
-	                   callback: Callback<BatchMutateCall>? = null): Response<BatchMutateCall>? =
+	                   callback: GpmCallback<BatchMutateCall>? = null): Response<BatchMutateCall>? =
 			executeOrEnqueue(mobileClientService.batchMutateStations(stationIds.map {
 				mapOf(
 						"delete" to it,
@@ -482,7 +563,7 @@ class MobileClient {
 	               includeTracks: Boolean,
 	               numTracks: Int,
 	               recentDateTime: Date? = null,
-	               callback: Callback<BatchMutateCall>? = null):
+	               callback: GpmCallback<BatchMutateCall>? = null):
 			Response<BatchMutateCall>? =
 			executeOrEnqueue(mobileClientService.batchMutateStations(
 					addStations = mapOf(
@@ -492,7 +573,7 @@ class MobileClient {
 									"imageType" to 1,
 									"lastModifiedTimestamp" to "-1",
 									"name" to name,
-									"recentTimestamp" to if (recentDateTime == null) (System.currentTimeMillis() * 1000).toString() else (recentDateTime.time * 1000).toString(),
+									"recentTimestamp" to if (recentDateTime == null) "${(System.currentTimeMillis() * 1000)}" else "${(recentDateTime.time * 1000)}",
 									"seed" to mapOf(
 											"itemId" to seedItemId,
 											"seedType" to seedType),
@@ -507,7 +588,7 @@ class MobileClient {
 	 * [callback] is optional used for async calls.
 	 */
 	fun deleteTracks(trackIds: List<String>,
-	                 callback: Callback<BatchMutateCall>? = null): Response<BatchMutateCall>? =
+	                 callback: GpmCallback<BatchMutateCall>? = null): Response<BatchMutateCall>? =
 			executeOrEnqueue(mobileClientService.batchMutateTracks(trackIds.map
 			{ "delete" to it }), callback)
 	
@@ -517,7 +598,7 @@ class MobileClient {
 	 * [callback] is optional used for async calls.
 	 */
 	fun addTrack(storeTrackInfo: Track,
-	             callback: Callback<BatchMutateCall>? = null): Response<BatchMutateCall>? =
+	             callback: GpmCallback<BatchMutateCall>? = null): Response<BatchMutateCall>? =
 			executeOrEnqueue(mobileClientService.batchMutateTracks(
 					addTracks = "create" to mapOf(
 							"title" to storeTrackInfo.title,
@@ -555,23 +636,28 @@ class MobileClient {
 							"clientId" to storeTrackInfo.clientId,
 							"id" to storeTrackInfo.id)), callback)
 	
-	sealed class Rating(val rating: String) {
-		class NoThumb : Rating("0")
-		class DownThumb : Rating("1")
-		class UpThumb : Rating("5")
-	}
-	
-	fun rateSongs(songs: List<Track>, rating: Rating = Rating.UpThumb(), callback: Callback<BatchMutateCall>? = null): Response<BatchMutateCall>? =
+	/**
+	 * Sets a rating for the specified tracks.
+	 * [songs] the tracks to rate.
+	 * [rating] the rating for the tracks.
+	 * [callback] is optional used for async calls.
+	 */
+	fun rateSongs(songs: List<Track>, rating: Rating = Rating.UpThumb, callback: GpmCallback<BatchMutateCall>? = null): Response<BatchMutateCall>? =
 			executeOrEnqueue(mobileClientService.batchMutateTracks(updateTracks = songs.map { it.rating = rating.rating; ("update" to it) }), callback)
 	
-	fun changeSongMetadata(songs: List<Track>, callback: Callback<BatchMutateCall>? = null): Response<BatchMutateCall>? =
+	/**
+	 * Modifies the metadata of the specified tracks.
+	 * [songs] the tracks to modify.
+	 * [callback] is optional used for async calls.
+	 */
+	fun changeSongMetadata(songs: List<Track>, callback: GpmCallback<BatchMutateCall>? = null): Response<BatchMutateCall>? =
 			executeOrEnqueue(mobileClientService.batchMutateTracks(updateTracks = songs.map { ("update" to it) }), callback)
 	
 	/**
 	 * Returns a list of devices associated with the account.
 	 * [callback] is optional used for async calls.
 	 */
-	fun getDeviceManagementInfo(callback: Callback<ListPager<DeviceManagement>>? = null): Response<ListPager<DeviceManagement>>? =
+	fun getDeviceManagementInfo(callback: GpmCallback<ListPager<DeviceManagement>>? = null): Response<ListPager<DeviceManagement>>? =
 			executeOrEnqueue(mobileClientService.getDeviceManagementInfo(), callback)
 	
 	/**
@@ -579,14 +665,14 @@ class MobileClient {
 	 * [deleteId] the id of the device to deauthorize.
 	 * [callback] is optional used for async calls.
 	 */
-	fun deauthDevice(deleteId: String, callback: Callback<Boolean>? = null): Response<Boolean>? =
+	fun deauthDevice(deleteId: String, callback: GpmCallback<Boolean>? = null): Response<Boolean>? =
 			executeOrEnqueue(mobileClientService.deauthDevice(deleteId), callback)
 	
 	/**
 	 * Retrieve the hierarchy of podcast browse genres.
 	 * [callback] is optional used for async calls.
 	 */
-	fun getBrowsePodcastHierarchy(callback: Callback<BrowsePodcastHierarchy>? = null): Response<BrowsePodcastHierarchy>? =
+	fun getBrowsePodcastHierarchy(callback: GpmCallback<BrowsePodcastHierarchy>? = null): Response<BrowsePodcastHierarchy>? =
 			executeOrEnqueue(mobileClientService.getBrowsePodcastHierarchy(), callback)
 	
 	/**
@@ -595,7 +681,7 @@ class MobileClient {
 	 * [numEpisodes] the number of episodes to retrieve.
 	 * [callback] is optional used for async calls.
 	 */
-	fun getPodcastSeries(podcastSeriesId: String, numEpisodes: Int, callback: Callback<PodcastSeries>? = null): Response<PodcastSeries>? =
+	fun getPodcastSeries(podcastSeriesId: String, numEpisodes: Int, callback: GpmCallback<PodcastSeries>? = null): Response<PodcastSeries>? =
 			executeOrEnqueue(mobileClientService.getPodcastSeries(podcastSeriesId, numEpisodes), callback)
 	
 	/**
@@ -603,7 +689,7 @@ class MobileClient {
 	 * [podcastEpisodeId] the id of the podcast episode; they always start with 'D'.
 	 * [callback] is optional used for async calls.
 	 */
-	fun getPodcastEpisode(podcastEpisodeId: String, callback: Callback<PodcastEpisode>? = null): Response<PodcastEpisode>? =
+	fun getPodcastEpisode(podcastEpisodeId: String, callback: GpmCallback<PodcastEpisode>? = null): Response<PodcastEpisode>? =
 			executeOrEnqueue(mobileClientService.getPodcastEpisode(podcastEpisodeId), callback)
 	
 	/**
@@ -611,7 +697,7 @@ class MobileClient {
 	 * [trackId] the track id to get; they always start with 'T'.
 	 * [callback] is optional used for async calls.
 	 */
-	fun getStoreTrack(trackId: String, callback: Callback<Track>? = null): Response<Track>? =
+	fun getStoreTrack(trackId: String, callback: GpmCallback<Track>? = null): Response<Track>? =
 			executeOrEnqueue(mobileClientService.getStoreTrack(trackId), callback)
 	
 	/**
@@ -621,7 +707,7 @@ class MobileClient {
 	 *      If this id is invalid, an empty list will be returned.
 	 * [callback] is optional used for async calls.
 	 */
-	fun getGenres(parentGenreId: String, callback: Callback<ListGenres>? = null): Response<ListGenres>? =
+	fun getGenres(parentGenreId: String, callback: GpmCallback<ListGenres>? = null): Response<ListGenres>? =
 			executeOrEnqueue(mobileClientService.getGenres(parentGenreId), callback)
 	
 	/**
@@ -636,7 +722,7 @@ class MobileClient {
 	              includeAlbums: Boolean = true,
 	              numTopTracks: Int,
 	              numRelatedArtists: Int,
-	              callback: Callback<Artist>? = null): Response<Artist>? =
+	              callback: GpmCallback<Artist>? = null): Response<Artist>? =
 			executeOrEnqueue(mobileClientService.getArtist(artistId, includeAlbums, numTopTracks, numRelatedArtists), callback)
 	
 	/**
@@ -647,7 +733,7 @@ class MobileClient {
 	 */
 	fun getAlbum(albumId: String,
 	             includeTracks: Boolean = true,
-	             callback: Callback<Album>? = null): Response<Album>? =
+	             callback: GpmCallback<Album>? = null): Response<Album>? =
 			executeOrEnqueue(mobileClientService.getAlbum(albumId, includeTracks), callback)
 	
 	/* part 1 of the streaming key */
@@ -667,7 +753,7 @@ class MobileClient {
 	 * [salt] the current time.
 	 */
 	private fun getStreamSignature(itemId: String, salt: String? = null): Pair<String, String> {
-		val songSalt = salt ?: System.currentTimeMillis().toString()
+		val songSalt = salt ?: "${System.currentTimeMillis()}"
 		
 		val mac = Mac.getInstance("HmacSHA1")
 		val keySpec = SecretKeySpec(key.toByteArray(), "HmacSHA1")
@@ -679,17 +765,6 @@ class MobileClient {
 	}
 	
 	/**
-	 * Possible quality options for streaming.
-	 * [quality] the name of the audio quality.
-	 * [kbps] kilobytes per second for the audio quality.
-	 */
-	sealed class Quality(val quality: String = "hi", val kbps: Int) {
-		class Hi : Quality("hi", 320)
-		class Med : Quality("med", 160)
-		class Low : Quality("low", 128)
-	}
-	
-	/**
 	 * Gets the stream URL for a track.
 	 * [songId] the id of the song to stream.
 	 * [deviceId] the id of the device being used to stream.
@@ -698,8 +773,8 @@ class MobileClient {
 	 */
 	fun getStreamUrl(songId: String,
 	                 deviceId: String,
-	                 quality: Quality = Quality.Hi(),
-	                 callback: Callback<String>? = null): Response<String>? =
+	                 quality: Quality = Quality.Hi,
+	                 callback: GpmCallback<String>? = null): Response<String>? =
 			executeOrEnqueue(mobileClientService.getStreamUrl(deviceId, getStreamSignature(songId).let
 			{ (sig, salt) ->
 				mutableMapOf(
@@ -720,8 +795,8 @@ class MobileClient {
 	 */
 	fun getPodcastEpisodeStreamUrl(episodeId: String,
 	                               deviceId: String,
-	                               quality: Quality = Quality.Hi(),
-	                               callback: Callback<String>? = null): Response<String>? =
+	                               quality: Quality = Quality.Hi,
+	                               callback: GpmCallback<String>? = null): Response<String>? =
 			executeOrEnqueue(mobileClientService.getPodcastEpisodeStreamUrl(deviceId, getStreamSignature(episodeId).let
 			{ (sig, salt) ->
 				mutableMapOf(
@@ -744,8 +819,8 @@ class MobileClient {
 	fun getStationTrackStreamUrl(songId: String,
 	                             wentryId: String,
 	                             sessionToken: String,
-	                             quality: Quality = Quality.Hi(),
-	                             callback: Callback<String>? = null): Response<String>? =
+	                             quality: Quality = Quality.Hi,
+	                             callback: GpmCallback<String>? = null): Response<String>? =
 			executeOrEnqueue(mobileClientService.getStationTrackStreamUrl(getStreamSignature(songId).let
 			{ (sig, salt) ->
 				mutableMapOf(

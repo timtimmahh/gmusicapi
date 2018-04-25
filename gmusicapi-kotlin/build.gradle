@@ -1,8 +1,6 @@
-apply plugin: 'com.android.application'
+apply plugin: 'com.android.library'
 apply plugin: 'kotlin-android'
 apply plugin: 'kotlin-android-extensions'
-//apply plugin: 'kotlinx-serialization'
-//apply plugin: 'kotlin-kapt'
 
 android {
 	compileSdkVersion 27
@@ -30,29 +28,21 @@ android {
 
 dependencies {
 	implementation fileTree(include: ['*.jar'], dir: 'libs')
-	implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk8:$kotlin_version"
-	implementation "org.jetbrains.kotlin:kotlin-reflect:$kotlin_version"
-	implementation "org.jetbrains.kotlinx:kotlinx-coroutines-android:$coroutines_version"
-	//	implementation "org.jetbrains.kotlinx:kotlinx-serialization-runtime:$serialization_version"
-	implementation 'com.android.support:appcompat-v7:27.1.1'
-	implementation 'com.android.support:design:27.1.1'
-	implementation 'com.android.support.constraint:constraint-layout:1.1.0'
 	testImplementation 'junit:junit:4.12'
 	androidTestImplementation 'com.android.support.test:runner:1.0.1'
 	androidTestImplementation 'com.android.support.test.espresso:espresso-core:3.0.1'
+
+	implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk8:$kotlin_version"
+	implementation "org.jetbrains.kotlin:kotlin-reflect:$kotlin_version"
+	implementation "org.jetbrains.kotlinx:kotlinx-coroutines-android:$coroutines_version"
+
 	implementation "com.squareup.retrofit2:retrofit:$retrofit_version"
 	implementation "com.squareup.retrofit2:converter-gson:$retrofit_version"
-	//	implementation "com.jakewharton.retrofit:retrofit2-kotlinx-serialization-converter:0.0.1"
-	//	implementation "com.squareup.retrofit2:converter-moshi:$retrofit_version"
 	implementation 'com.squareup.okhttp3:logging-interceptor:3.10.0'
-	//	implementation "com.squareup.moshi:moshi-kotlin:1.5.0"
-	//	implementation "com.squareup.moshi:moshi-adapters:1.5.0"
+
 	implementation 'com.github.svarzee:gpsoauth-java:v0.5.0'
-	//	implementation 'se.ansman.kotshi:api:1.0.3'
-	//	kapt 'se.ansman.kotshi:compiler:1.0.3'
 	implementation 'com.google.code.gson:gson:2.8.2'
 }
-apply plugin: 'kotlin-android-extensions'
 
 kotlin {
 	experimental {

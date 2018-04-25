@@ -1,4 +1,11 @@
-import com.google.gson.Gson
+import android.util.Log
+import com.google.gson.GsonBuilder
+import com.google.gson.JsonParser
+import com.google.gson.JsonSyntaxException
+import com.timmahh.gmusicapi.clients.ListPagerTypeAdapterFactory
+import com.timmahh.gmusicapi.clients.SearchType
+import com.timmahh.gmusicapi.clients.SearchTypeDeserializer
+import com.timmahh.gmusicapi.clients.SearchTypeSerializer
 import com.timmahh.gmusicapi.protocol.*
 import okhttp3.Interceptor
 import okhttp3.OkHttpClient
@@ -27,7 +34,7 @@ data class OAuthInfo(
  * The request interceptor that will add the header with OAuth
  * token to every request made with the wrapper.
  */
-class ApiAuthenticator(val mAccessToken: String?, val locale: String = "en_US", val isSubscribed: Boolean = false) : Interceptor {
+class ApiAuthenticator(private val mAccessToken: String?, private val locale: String = "en_US", private val isSubscribed: Boolean = false) : Interceptor {
 	
 	@Throws(IOException::class)
 	override fun intercept(chain: Interceptor.Chain): Response {
@@ -39,7 +46,7 @@ class ApiAuthenticator(val mAccessToken: String?, val locale: String = "en_US", 
 							.addQueryParameter("dv", "0")
 							.addQueryParameter("tier", if (isSubscribed) "aa" else "fr")
 							.build())
-					.addHeader("Authorization", "GoogleLogin auth=" + mAccessToken)
+					.addHeader("Authorization", "GoogleLogin auth=$mAccessToken")
 					.build()
 			
 			return chain.proceed(authRequest)
@@ -48,36 +55,64 @@ class ApiAuthenticator(val mAccessToken: String?, val locale: String = "en_US", 
 	}
 }
 
+class GsonPrettyPrintLogging : HttpLoggingInterceptor.Logger {
+	
+	override fun log(message: String) {
+		val tag = "PrettyJSON"
+		if (message.startsWith("{") || message.startsWith("[")) {
+			try {
+				val prettyPrintJson = GsonBuilder().setPrettyPrinting()
+						.create().toJson(JsonParser().parse(message))
+				Log.d(tag, prettyPrintJson)
+			} catch (m: JsonSyntaxException) {
+				Log.d(tag, message)
+			}
+		} else {
+			Log.d("OkHttp", message)
+			return
+		}
+	}
+	
+}
+
+fun createGson() =
+		GsonBuilder()
+				.setPrettyPrinting()
+				.registerTypeAdapter(SearchType::class.java, SearchTypeSerializer())
+				.registerTypeAdapter(SearchType::class.java, SearchTypeDeserializer())
+				.registerTypeAdapterFactory(ListPagerTypeAdapterFactory())
+				.create()
+
 /**
  * Creates a Retrofit instance with necessary JSON conversion adapters.
  */
-fun createRetrofit(url: String,
-                   httpClient: OkHttpClient = createAuthenticatedHttpClient()): Retrofit =
+fun createRetrofit(url: String, httpClient: OkHttpClient = createAuthHttpClient()): Retrofit =
 		Retrofit.Builder()
 				.client(httpClient)
 				.baseUrl(url)
-				.addConverterFactory(GsonConverterFactory.create(Gson()))
+				.addConverterFactory(GsonConverterFactory.create(createGson()))
 				.build()
 
 /**
  * Creates the OkHttpClient with an authenticated interceptor.
  */
-fun createAuthenticatedHttpClient(authToken: String? = null): OkHttpClient =
+fun createAuthHttpClient(authToken: String? = null): OkHttpClient =
 		OkHttpClient.Builder()
 				.addInterceptor(ApiAuthenticator(authToken))
-				.addInterceptor(HttpLoggingInterceptor().setLevel(HttpLoggingInterceptor.Level.BODY))
+				.addInterceptor(HttpLoggingInterceptor(GsonPrettyPrintLogging())
+						.setLevel(HttpLoggingInterceptor.Level.BODY))
 				.build()
 
 /**
  * Creates a Retrofit service instance for MusicManagerService
  */
-fun createMusicManagerService(httpClient: OkHttpClient = createAuthenticatedHttpClient()): MusicManagerService =
+fun createMusicManagerService(httpClient: OkHttpClient = createAuthHttpClient()): MusicManagerService =
 		createRetrofit(android_url, httpClient).create(MusicManagerService::class.java)
 
 /**
  * Creates a Retrofit service instance for MobileClientService
  */
-fun createMobileClientService(httpClient: OkHttpClient = createAuthenticatedHttpClient()): MobileClientService =
+fun createMobileClientService(httpClient: OkHttpClient = createAuthHttpClient()): MobileClientService =
 		createRetrofit(sj_url, httpClient).create(MobileClientService::class.java)
 
 /**
@@ -167,7 +202,7 @@ interface MobileClientService {
 	                  @Body data: Map<String, String>): Call<ListPager<Playlist>>
 	
 	@Headers(contentType)
-	@POST("playlistfeed?alt=json&include-tracks=true")
+	@POST("plentryfeed?alt=json&include-tracks=true")
 	fun listPlaylistEntries(@Query("updated-min") microseconds: Long = - 1,
 	                        @Body data: Map<String, String>): Call<ListPager<PlaylistEntry>>
 	
@@ -194,11 +229,11 @@ interface MobileClientService {
 	
 	@Headers(contentType)
 	@GET("podcastseries?alt=json&include-tracks=true")
-	fun listPodcastSeries(@Header("X-Device-ID") deviceId: String, @Query("updated-min") microseconds: Long = - 1, @Query("start-token") startToken: String, @Query("max-results") maxResults: Int = 1000): Call<ListPager<PodcastSeries>>
+	fun listPodcastSeries(@Header("X-Device-ID") deviceId: String, @Query("updated-min") microseconds: Long = - 1, @Query("start-token") startToken: String? = null, @Query("max-results") maxResults: Int = 1000): Call<ListPager<PodcastSeries>>
 	
 	@Headers(contentType)
 	@GET("podcastepisode?alt=json&include-tracks=true")
-	fun listPodcastEpisodes(@Header("X-Device-ID") deviceId: String, @Query("updated-min") microseconds: Long = - 1, @Query("start-token") startToken: String, @Query("max-results") maxResults: Int = 1000): Call<ListPager<PodcastEpisode>>
+	fun listPodcastEpisodes(@Header("X-Device-ID") deviceId: String, @Query("updated-min") microseconds: Long = - 1, @Query("start-token") startToken: String? = null, @Query("max-results") maxResults: Int = 1000): Call<ListPager<PodcastEpisode>>
 	
 	@Headers(contentType)
 	@POST("radio/station?alt=json&include-tracks=true")

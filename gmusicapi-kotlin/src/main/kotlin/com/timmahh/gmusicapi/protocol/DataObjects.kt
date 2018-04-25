@@ -1,6 +1,7 @@
 package com.timmahh.gmusicapi.protocol
 
 import com.google.gson.annotations.SerializedName
+import com.timmahh.gmusicapi.clients.SearchType
 import java.util.*
 
 //@JsonSerializable
@@ -87,9 +88,10 @@ data class Playlist(val kind: String,
                     val id: String? = null,
                     val albumArtRef: List<ImageUrl>? = null,
 		//@JsonDefaultValueString("")
-                    val description: String? = "",
-                    val explicitType: String? = null,
-                    val contentType: String? = null)
+		            val description: String? = "",
+		            val explicitType: String? = null,
+		            val contentType: String? = null,
+		            var tracks: List<PlaylistEntry>? = null)
 
 //@JsonSerializable
 data class PlaylistEntry(val kind: String,
@@ -291,7 +293,7 @@ data class Situation(val description: String,
 
 //@JsonSerializable
 data class SearchResult(val score: Number? = null,
-                        val type: String,
+                        val type: SearchType = SearchType.None,
                         @SerializedName("best_result") val bestResult: Boolean? = null,
                         @SerializedName("navigational_result")
                         val navigationalResult: Boolean? = null,
@@ -337,10 +339,10 @@ data class Entries<out T>(val kind: String? = null,
 //@JsonSerializable
 data class ListPager<out T>(val kind: String,
                             val nextPageToken: String? = null,
-                            val data: ListItems<T>? = null)
+                            val items: List<T>? = null)
 
 //@JsonSerializable
-data class ListItems<out T>(val items: List<T>)
+//data class ListItems<out T>(val items: List<T>)
 
 //@JsonSerializable
 data class ListenNowItems(val kind: String,
