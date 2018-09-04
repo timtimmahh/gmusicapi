@@ -55,6 +55,9 @@ class ApiAuthenticator(private val mAccessToken: String?, private val locale: St
 	}
 }
 
+/**
+ * A Gson pretty print HttpLoggingIntercepter logger for OkHttpClient.
+ */
 class GsonPrettyPrintLogging : HttpLoggingInterceptor.Logger {
 	
 	override fun log(message: String) {
@@ -75,6 +78,9 @@ class GsonPrettyPrintLogging : HttpLoggingInterceptor.Logger {
 	
 }
 
+/**
+ * Creates a Gson instance with necessary type adapters and pretty printing.
+ */
 fun createGson() =
 		GsonBuilder()
 				.setPrettyPrinting()

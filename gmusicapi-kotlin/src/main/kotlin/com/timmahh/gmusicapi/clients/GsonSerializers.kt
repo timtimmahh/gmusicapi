@@ -6,6 +6,9 @@ import com.google.gson.stream.JsonReader
 import com.google.gson.stream.JsonWriter
 import java.lang.reflect.Type
 
+/**
+ * Converts SearchType's to JSON.
+ */
 class SearchTypeSerializer : JsonSerializer<SearchType> {
 	
 	override fun serialize(src: SearchType?, typeOfSrc: Type?, context: JsonSerializationContext?): JsonElement {
@@ -14,6 +17,9 @@ class SearchTypeSerializer : JsonSerializer<SearchType> {
 	
 }
 
+/**
+ * Converts JSON values of SearchType's to a SearchType.
+ */
 class SearchTypeDeserializer : JsonDeserializer<SearchType> {
 	
 	private fun getIntValue(json: JsonElement) =
@@ -39,6 +45,10 @@ class SearchTypeDeserializer : JsonDeserializer<SearchType> {
 			}
 }
 
+/**
+ * Moves the items subsection of a list pager's data section to replace the data.
+ * Purpose of this is to prevent the need to do [ListPager.data.items], and can instead do [ListPager.items].
+ */
 class ListPagerTypeAdapterFactory : TypeAdapterFactory {
 	
 	override fun <T> create(gson: Gson, type: TypeToken<T>): TypeAdapter<T> {

@@ -4,6 +4,9 @@ import retrofit2.Call
 import retrofit2.Callback
 import retrofit2.Response
 
+/**
+ * A callback class for Retrofit calls to Google Play Music.
+ */
 abstract class GpmCallback<T> : Callback<T> {
 	
 	
@@ -25,6 +28,9 @@ abstract class GpmCallback<T> : Callback<T> {
 	
 }
 
+/**
+ * A callback class to return only the Response body without the Response.
+ */
 abstract class BodyOnlyGpmCallback<T> : GpmCallback<T>() {
 	
 	abstract fun onResponse(call: Call<T>, payload: T)
@@ -35,6 +41,9 @@ abstract class BodyOnlyGpmCallback<T> : GpmCallback<T>() {
 	
 }
 
+/**
+ * An exception class for Google Play Music Retrofit calls.
+ */
 class GpmError : Exception {
 	
 	constructor(detailMessage: String) : super(detailMessage)

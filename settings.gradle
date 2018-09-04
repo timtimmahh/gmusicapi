@@ -1,1 +1,3 @@
-include ':gmusicapi-kotlin'
+include ':gmusicapi-kotlin', ':gpsoauth-kotlin'
+
+project (':gpsoauth-kotlin').projectDir = new File('/run/media/tim/Programming/Projects/gpsoauth/gpsoauth-kotlin')

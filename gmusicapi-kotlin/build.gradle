@@ -1,4 +1,5 @@
 apply plugin: 'com.android.library'
+apply from: 'maven-push.gradle'
 apply plugin: 'kotlin-android'
 apply plugin: 'kotlin-android-extensions'
 
@@ -29,8 +30,8 @@ android {
 dependencies {
 	implementation fileTree(include: ['*.jar'], dir: 'libs')
 	testImplementation 'junit:junit:4.12'
-	androidTestImplementation 'com.android.support.test:runner:1.0.1'
-	androidTestImplementation 'com.android.support.test.espresso:espresso-core:3.0.1'
+	androidTestImplementation 'com.android.support.test:runner:1.0.2'
+	androidTestImplementation 'com.android.support.test.espresso:espresso-core:3.0.2'
 
 	implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk8:$kotlin_version"
 	implementation "org.jetbrains.kotlin:kotlin-reflect:$kotlin_version"
@@ -40,7 +41,7 @@ dependencies {
 	implementation "com.squareup.retrofit2:converter-gson:$retrofit_version"
 	implementation 'com.squareup.okhttp3:logging-interceptor:3.10.0'
 
-	implementation 'com.github.svarzee:gpsoauth-java:v0.5.0'
+	implementation project(':gpsoauth-kotlin')
 	implementation 'com.google.code.gson:gson:2.8.2'
 }
 

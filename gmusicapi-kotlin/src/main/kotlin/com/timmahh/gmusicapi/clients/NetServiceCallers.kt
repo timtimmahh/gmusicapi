@@ -5,14 +5,12 @@ import android.util.Base64
 import android.util.Log
 import com.google.gson.Gson
 import com.timmahh.gmusicapi.protocol.*
+import com.timmahh.gpsoauth.Gpsoauth
 import createAuthHttpClient
 import createMobileClientService
-import kotlinx.coroutines.experimental.Deferred
-import kotlinx.coroutines.experimental.async
 import okhttp3.OkHttpClient
 import retrofit2.Call
 import retrofit2.Response
-import svarzee.gps.gpsoauth.Gpsoauth
 import java.security.InvalidParameterException
 import java.util.*
 import javax.crypto.Mac
@@ -27,6 +25,7 @@ class MobileClient {
 	
 	companion object {
 		
+		/* the http client used to make Retrofit calls */
 		@JvmField
 		var httpClient: OkHttpClient = createAuthHttpClient()
 		
@@ -34,17 +33,24 @@ class MobileClient {
 		@JvmField
 		var mobileClientService = createMobileClientService(httpClient = httpClient)
 		
+		/* holds the login master token and auth token */
 		private lateinit var masterToken: String
 		private lateinit var authToken: String
 		private var isAuthenticated: Boolean = false
 		private lateinit var locale: Locale
 		
+		/**
+		 * Saves auth token and master token to shared preferences file.
+		 */
 		fun saveCredentialsToFile(preferences: SharedPreferences) =
 				preferences.edit()
 						.putString("Master", masterToken)
 						.putString("Token", authToken)
 						.apply()
 		
+		/**
+		 * Reads auth token and master token from shared preferences file.
+		 */
 		fun readCredentialsFromFile(preferences: SharedPreferences, locale: Locale): Boolean =
 				if (preferences.contains("Master") && preferences.contains("Token")) {
 					masterToken = preferences.getString("Master", "")
@@ -77,8 +83,14 @@ class MobileClient {
 				|   """.trimMargin()) { "\"" + it.replaceFirst("=", "\": \"") + "\"" }}
 			  |}""".trimMargin()
 	
-	suspend fun loginWithSavedCredsOrGet(sharedPreferences: SharedPreferences, email: String, password: String, androidId: String, locale: Locale = Locale.US) =
-			readCredentialsFromFile(sharedPreferences, locale) || login(email, password, androidId, locale).await().also { if (it) saveCredentialsToFile(sharedPreferences) }
+	/**
+	 * Helper function to load credentials from storage, or send a login request if
+	 * they don't exist.
+	 */
+	fun loginWithSavedCredsOrGet(sharedPreferences: SharedPreferences, email: String, password: String, androidId: String, locale: Locale = Locale.US) =
+			readCredentialsFromFile(sharedPreferences, locale)
+					|| login(email, password, androidId, locale)
+					.also { if (it) saveCredentialsToFile(sharedPreferences) }
 	
 	/**
 	 * Performs a master login flow for Google accounts.
@@ -87,12 +99,15 @@ class MobileClient {
 	 * [androidId] the current device's Android ID.
 	 * [locale] the current device's locale.
 	 */
-	private fun login(email: String, password: String, androidId: String, locale: Locale = Locale.US): Deferred<Boolean> = async {
+	private fun login(email: String, password: String, androidId: String, locale: Locale = Locale.US): Boolean {
 		if (androidId.isEmpty())
 			throw InvalidParameterException("androidId cannot be empty.")
 		
 		
 		MobileClient.masterToken = Gpsoauth(httpClient).performMasterLoginForToken(email, password, androidId)
+		
+		if (MobileClient.masterToken.isEmpty())
+			return false
 		
 		val oauthLogin = Gson().fromJson<OAuthLogin>(
 				convertResponseStringToJson(
@@ -107,7 +122,7 @@ class MobileClient {
 				OAuthLogin::class.java)
 		
 		if (oauthLogin?.auth == null || oauthLogin.auth.isEmpty())
-			return@async false
+			return false
 		
 		MobileClient.authToken = oauthLogin.auth
 		MobileClient.isAuthenticated = true
@@ -118,7 +133,7 @@ class MobileClient {
 		MobileClient.httpClient = createAuthHttpClient(MobileClient.authToken)
 		MobileClient.mobileClientService = createMobileClientService(MobileClient.httpClient)
 		
-		return@async true
+		return true
 	}
 	
 	/**
@@ -138,7 +153,7 @@ class MobileClient {
 								"incremental_plays" to playCount,
 								"last_play_time_millis" to "${playTimestamp.time}",
 								"type" to if (songId.startsWith("T")) 2 else 1,
-								"track_events" to Array(playCount, { _ ->
+								"track_events" to Array(playCount) { _ ->
 									val event = mutableMapOf(
 											"context_type" to 1,
 											"event_timestamp_micros" to "${(playTimestamp.time * 1000)}",
@@ -146,7 +161,7 @@ class MobileClient {
 									if (contextId != null)
 										event["context_id"] = contextId
 									event
-								}))
+								})
 					}), callback)
 	
 	/**
